@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
 
+// Evaluate at request time so this reflects the running container's
+// environment (Azure App Settings / docker env), not build-time values.
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   return NextResponse.json({
     hasClientId: !!process.env.NEXT_PUBLIC_OKTA_CLIENT_ID,

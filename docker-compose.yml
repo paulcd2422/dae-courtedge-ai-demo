@@ -1,0 +1,33 @@
+# Run the whole demo on localhost with Docker:
+#   cp .env.example .env   # fill in your Okta / Anthropic values
+#   docker compose up --build
+#
+# Frontend: http://localhost:3000   Backend: http://localhost:8000
+services:
+  backend:
+    build: ./backend
+    env_file: .env
+    environment:
+      BACKEND_PORT: "8000"
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: packages/progear-sales-agent/Dockerfile
+      args:
+        # Browser-side URL of the backend (inlined at build time)
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_OKTA_CLIENT_ID: ${NEXT_PUBLIC_OKTA_CLIENT_ID}
+        NEXT_PUBLIC_OKTA_DOMAIN: ${NEXT_PUBLIC_OKTA_DOMAIN}
+        NEXT_PUBLIC_OKTA_ISSUER: ${NEXT_PUBLIC_OKTA_ISSUER}
+    env_file: .env
+    environment:
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      PORT: "3000"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend

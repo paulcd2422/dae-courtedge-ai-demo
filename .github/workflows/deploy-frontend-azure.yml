@@ -1,0 +1,88 @@
+# Build the Next.js frontend image, push it to Azure Container Registry and
+# roll it out to the Azure Web App created by infra/azure/main.bicep.
+#
+# Repository SECRETS required:
+#   AZURE_CREDENTIALS   - output of:
+#       az ad sp create-for-rbac --name progear-deploy --role contributor \
+#         --scopes /subscriptions/<sub>/resourceGroups/<rg> --sdk-auth
+#
+# Repository VARIABLES required (Settings -> Secrets and variables -> Actions -> Variables):
+#   AZURE_RESOURCE_GROUP        - e.g. rg-progear-demo
+#   AZURE_WEBAPP_NAME           - appName used in the Bicep deployment
+#   AZURE_ACR_NAME              - acrName used in the Bicep deployment
+#   NEXT_PUBLIC_API_URL         - public URL of the FastAPI backend
+#   NEXT_PUBLIC_OKTA_CLIENT_ID  - Okta OIDC client ID
+#   NEXT_PUBLIC_OKTA_DOMAIN     - https://your-org.okta.com
+#   NEXT_PUBLIC_OKTA_ISSUER     - https://your-org.okta.com (Org AS, no auth server ID)
+#
+# NEXT_PUBLIC_* values are compiled into the bundle by Next.js, which is why
+# they are passed as build args rather than App Settings.
+
+name: Deploy frontend to Azure
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/progear-sales-agent/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/deploy-frontend-azure.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-frontend-azure
+  cancel-in-progress: false
+
+env:
+  IMAGE_REPOSITORY: progear-frontend
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Log in to ACR
+        run: az acr login --name "${{ vars.AZURE_ACR_NAME }}"
+
+      - name: Build and push image
+        env:
+          ACR_LOGIN_SERVER: ${{ vars.AZURE_ACR_NAME }}.azurecr.io
+        run: |
+          IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY"
+          docker build \
+            -f packages/progear-sales-agent/Dockerfile \
+            --build-arg NEXT_PUBLIC_API_URL="${{ vars.NEXT_PUBLIC_API_URL }}" \
+            --build-arg NEXT_PUBLIC_OKTA_CLIENT_ID="${{ vars.NEXT_PUBLIC_OKTA_CLIENT_ID }}" \
+            --build-arg NEXT_PUBLIC_OKTA_DOMAIN="${{ vars.NEXT_PUBLIC_OKTA_DOMAIN }}" \
+            --build-arg NEXT_PUBLIC_OKTA_ISSUER="${{ vars.NEXT_PUBLIC_OKTA_ISSUER }}" \
+            -t "$IMAGE:${{ github.sha }}" \
+            -t "$IMAGE:latest" \
+            .
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
+          resource-group-name: ${{ vars.AZURE_RESOURCE_GROUP }}
+          images: ${{ vars.AZURE_ACR_NAME }}.azurecr.io/${{ env.IMAGE_REPOSITORY }}:${{ github.sha }}
+
+      - name: Smoke test
+        run: |
+          URL="https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net/api/debug"
+          for i in $(seq 1 12); do
+            if curl -fsS "$URL" > /dev/null; then echo "Frontend is up: $URL"; exit 0; fi
+            echo "Waiting for app to start ($i/12)..."; sleep 10
+          done
+          echo "Frontend did not respond at $URL"; exit 1

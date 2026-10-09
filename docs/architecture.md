@@ -13,7 +13,7 @@ ProGear is a multi-agent AI system where a single orchestrator coordinates 4 spe
 ```
 ┌───────────────────────────────────────────────────────────────┐
 │                        User Browser                           │
-│                   (Next.js on Vercel)                         │
+│              (Next.js on localhost / Azure)                   │
 └─────────────────────────────┬─────────────────────────────────┘
                               │
                               │ 1. User logs in via Okta

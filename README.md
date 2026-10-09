@@ -33,9 +33,9 @@ This demo implements **Scenario 2** from our [four scenarios framework](docs/okt
 | **Complete Audit Trail** | Every token exchange logged with who, what, when, why |
 | **Instant Revocation** | One-click deactivation of any AI agent |
 
-### Live Demo
+### Running the Demo
 
-- **Frontend**: [progear-sales-agent.vercel.app](https://progear-sales-agent.vercel.app)
+- **Frontend**: `http://localhost:3000` locally, or your Azure Web App at `https://<app-name>.azurewebsites.net` - see [Run Locally](#run-locally) and [Deploy Your Own](#deploy-your-own)
 - **Backend API**: [courtedge-progear-backend.onrender.com](https://courtedge-progear-backend.onrender.com)
 
 ### 📚 Documentation
@@ -137,22 +137,48 @@ Three user groups with different access levels:
 
 **Important**: The Okta AI SDK always performs Step 1 at the Org Authorization Server, not a Custom AS. This means users must log in via the Org AS (set `NEXT_PUBLIC_OKTA_ISSUER` to your org URL without an auth server ID).
 
+## Run Locally
+
+The frontend reads its environment from `packages/progear-sales-agent/.env.local` (not the repo root).
+
+```bash
+# Frontend (Next.js) - http://localhost:3000
+cp packages/progear-sales-agent/.env.local.example packages/progear-sales-agent/.env.local
+npm install
+npm run dev
+
+# Backend (FastAPI) - http://localhost:8000, in a second terminal
+cd backend && pip install -r requirements.txt
+uvicorn api.main:app --reload --port 8000
+```
+
+Or run both containers with Docker:
+
+```bash
+cp .env.example .env   # fill in Okta / Anthropic values
+docker compose up --build
+```
+
+Add `http://localhost:3000/api/auth/callback/okta` (sign-in) and `http://localhost:3000/auth/signin` (sign-out) to your Okta OIDC app's redirect URIs.
+
 ## Deploy Your Own
 
 Want to deploy this demo with your own Okta org? Follow the **[Implementation Guide](docs/implementation-guide.md)** for complete instructions on:
 
 1. Configuring Okta (AI Agent, Authorization Servers, Users, Groups)
-2. Deploying the frontend to **Vercel**
+2. Deploying the frontend to **Azure App Service** (Bicep template in `infra/azure/`, GitHub Actions workflow in `.github/workflows/deploy-frontend-azure.yml`)
 3. Deploying the backend to **Render**
 4. Connecting everything together
+
+The frontend is a standard Next.js standalone container, so the same image also runs on Azure Container Apps or any Docker host.
 
 ## Documentation
 
 | Document | Audience | Description |
 |----------|----------|-------------|
 | **[Security & Governance Guide](docs/okta-security-value.md)** | Security teams, architects | The four scenarios framework, XAA/ID-JAG concepts, MCP adoption, governance model |
-| **[Implementation Guide](docs/implementation-guide.md)** | Developers, DevOps | Complete deployment walkthrough for Vercel + Render with Okta configuration |
-| **[Live Architecture Page](https://progear-sales-agent.vercel.app/architecture)** | Everyone | Interactive visualization of the token exchange flow in the running demo |
+| **[Implementation Guide](docs/implementation-guide.md)** | Developers, DevOps | Complete deployment walkthrough for Azure App Service (frontend) + Render (backend) with Okta configuration |
+| **Architecture Page** (`/architecture` in the running app) | Everyone | Interactive visualization of the token exchange flow in the running demo |
 
 ## Technology Stack
 
@@ -162,7 +188,7 @@ Want to deploy this demo with your own Okta org? Follow the **[Implementation Gu
 | Backend | FastAPI, LangGraph, LangChain, Python 3.9+ |
 | LLM | Anthropic Claude (claude-sonnet-4-20250514) |
 | Auth | Okta OIDC, Cross App Access (XAA), ID-JAG Token Exchange |
-| Deployment | Vercel (frontend), Render (backend) |
+| Deployment | Frontend: localhost / Docker / Azure App Service for Containers. Backend: Render (or any Python host) |
 
 ## Environment Variables
 

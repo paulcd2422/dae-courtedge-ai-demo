@@ -7,7 +7,7 @@
 
 ┌─────────────────────────────┐          ┌──────────────────────────────────────────────────────────────────────────────────┐
 │  BROWSER                    │          │  FASTAPI BACKEND  (Render, Python / Uvicorn)                                      │
-│  (Vercel, Next.js 14+React) │  HTTPS   │                                                                                  │        ┌──────────────────────────────────────────────────────┐
+│  (Azure, Next.js 14+React)  │  HTTPS   │                                                                                  │        ┌──────────────────────────────────────────────────────┐
 │                             │          │  main.py                                                                         │  ①    │  OKTA  (Org Authorization Server)                    │
 │  NextAuth.js  (OIDC client) │─────────►│  ┌────────────────────────────────────────────────────────────────────────────┐  │───────►│  /oauth2/{orgAS}/v1/authorize                        │
 │  /api/auth/[...nextauth]    │  (JWT)   │  │ POST /api/chat   → orchestrate(msg, id_token)                      (→ ②)  │  │◄───────│  /oauth2/{orgAS}/v1/token  (OIDC code exchange)      │

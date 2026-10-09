@@ -7,12 +7,13 @@
 1. [Introduction](#introduction)
 2. [Deployment Order Overview](#deployment-order-overview)
 3. [Understanding the Architecture](#understanding-the-architecture)
-4. [What is Vercel?](#what-is-vercel)
+4. [Frontend Hosting: Localhost and Azure](#frontend-hosting-localhost-and-azure)
 5. [What is Render?](#what-is-render)
-6. [How Vercel and Render Work Together](#how-vercel-and-render-work-together)
+6. [How the Frontend and Render Work Together](#how-the-frontend-and-render-work-together)
 7. [Prerequisites](#prerequisites)
 8. [Okta Configuration](#okta-configuration)
-9. [Clone and Deploy to Vercel (Frontend)](#clone-and-deploy-to-vercel-frontend)
+9. [Run the Frontend Locally](#run-the-frontend-locally)
+9b. [Deploy the Frontend to Azure App Service](#deploy-the-frontend-to-azure-app-service)
 10. [Deploy to Render (Backend)](#deploy-to-render-backend)
 11. [Connect Frontend to Backend](#connect-frontend-to-backend)
 12. [Environment Variables Reference](#environment-variables-reference)
@@ -37,7 +38,7 @@ If you want to understand how to build a multi-agent AI chatbot with enterprise-
 - How token exchange flows preserve user identity through the AI pipeline
 
 **2. Quick Deployers**
-If you want to clone this repository, deploy it to Vercel and Render, and configure your own Okta instance to see the demo in action, follow the step-by-step deployment sections.
+If you want to clone this repository, run the frontend on localhost or Azure App Service, deploy the backend to Render, and configure your own Okta instance to see the demo in action, follow the step-by-step deployment sections.
 
 ### What You'll Deploy
 
@@ -67,31 +68,32 @@ Before diving in, understand the order of operations. There's a circular depende
 │  │ • Create 4 Authorization Servers with policies                    │  │
 │  └───────────────────────────────────────────────────────────────────┘  │
 │                                   ▼                                     │
-│  PHASE 2: Deploy Frontend to Vercel                                     │
+│  PHASE 2: Host the Frontend (localhost or Azure App Service)            │
 │  ┌───────────────────────────────────────────────────────────────────┐  │
-│  │ • Fork repo and import to Vercel                                  │  │
-│  │ • Get your Vercel URL (e.g., my-app.vercel.app)                   │  │
-│  │ • Configure environment variables                                 │  │
+│  │ • Localhost: npm run dev on http://localhost:3000                 │  │
+│  │ • Azure: deploy infra/azure/main.bicep, note the Web App URL      │  │
+│  │   (e.g., my-app.azurewebsites.net)                                │  │
+│  │ • Configure environment variables / App Settings                  │  │
 │  └───────────────────────────────────────────────────────────────────┘  │
 │                                   ▼                                     │
 │  PHASE 3: Deploy Backend to Render                                      │
 │  ┌───────────────────────────────────────────────────────────────────┐  │
 │  │ • Create web service from your fork                               │  │
 │  │ • Get your Render URL (e.g., my-backend.onrender.com)             │  │
-│  │ • Configure environment variables (including CORS for Vercel)    │  │
+│  │ • Configure environment variables (including CORS for frontend)   │  │
 │  └───────────────────────────────────────────────────────────────────┘  │
 │                                   ▼                                     │
 │  PHASE 4: Connect Everything                                            │
 │  ┌───────────────────────────────────────────────────────────────────┐  │
-│  │ • Update Vercel with Render URL                                   │  │
-│  │ • Update Okta redirect URIs with real Vercel URL                  │  │
+│  │ • Rebuild the frontend with the Render URL (NEXT_PUBLIC_API_URL)  │  │
+│  │ • Update Okta redirect URIs with real frontend URL                │  │
 │  │ • Test the complete flow                                          │  │
 │  └───────────────────────────────────────────────────────────────────┘  │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-> **Why this order?** You need the Vercel URL to configure Okta redirects, and you need the Render URL to configure the frontend. By using placeholder values initially, you can complete each phase and then circle back to connect them.
+> **Why this order?** You need the frontend URL (localhost or Azure) to configure Okta redirects, and you need the Render URL to configure the frontend. By using placeholder values initially, you can complete each phase and then circle back to connect them.
 
 ---
 
@@ -108,7 +110,7 @@ Before diving into deployment, understand how the pieces fit together:
                                   │ HTTPS
                                   ▼
 ┌───────────────────────────────────────────────────────────────────┐
-│                        VERCEL (Frontend)                          │
+│              FRONTEND (localhost or Azure App Service)            │
 │                                                                   │
 │   ┌───────────────────────────────────────────────────────────┐   │
 │   │                   Next.js Application                     │   │
@@ -119,7 +121,7 @@ Before diving into deployment, understand how the pieces fit together:
 │   │  • Security dashboard                                     │   │
 │   └───────────────────────────────────────────────────────────┘   │
 │                                                                   │
-│   URL: https://your-app.vercel.app                                │
+│   URL: http://localhost:3000  or  https://your-app.azurewebsites.net │
 └─────────────────────────────────┬─────────────────────────────────┘
                                   │
                                   │ API calls with ID token
@@ -170,50 +172,61 @@ When a user sends a message:
 
 ---
 
-## What is Vercel?
+## Frontend Hosting: Localhost and Azure
 
 ### Overview
 
-**Vercel** is a cloud platform optimized for frontend frameworks, especially Next.js (which was created by Vercel). It handles deployment, hosting, and scaling of web applications.
+The frontend is a plain **Next.js 14** application built with `output: 'standalone'`. That produces a self-contained Node.js server (`server.js`) with no platform-specific runtime, so the same code runs in three places:
 
-### Why We Use Vercel for the Frontend
+| Where | How | Use it for |
+|-------|-----|-----------|
+| **Localhost (npm)** | `npm run dev` → http://localhost:3000 | Development, quick demos |
+| **Localhost (Docker)** | `docker compose up` → frontend + backend containers | Reproducible local demo |
+| **Azure App Service for Containers** | Image in Azure Container Registry, deployed by GitHub Actions | Shared / hosted demo |
+
+The Docker image (`packages/progear-sales-agent/Dockerfile`) is standard, so it also runs unchanged on **Azure Container Apps** or any other container host if you prefer.
+
+### Why Azure App Service for the Hosted Frontend
 
 | Feature | Benefit for This Demo |
 |---------|----------------------|
-| **Zero-config deployment** | Push to GitHub → automatically deployed |
-| **Global CDN** | Fast load times worldwide |
-| **Serverless functions** | API routes run as serverless functions |
-| **Environment variables** | Secure storage for Okta credentials |
-| **Preview deployments** | Every PR gets its own URL for testing |
-| **HTTPS by default** | Required for Okta OAuth callbacks |
+| **Web App for Containers** | Runs the Next.js standalone image as-is |
+| **HTTPS by default** | `https://<app>.azurewebsites.net` - required for Okta OAuth callbacks |
+| **App Settings** | Secure storage for `NEXTAUTH_SECRET` and `OKTA_CLIENT_SECRET` at runtime |
+| **Managed identity → ACR** | Web App pulls images without registry passwords |
+| **Infrastructure as code** | `infra/azure/main.bicep` creates ACR + plan + Web App in one deployment |
+| **GitHub Actions** | `.github/workflows/deploy-frontend-azure.yml` builds, pushes and deploys on every push to `main` |
 
-### How Vercel Works
+### Build-time vs Runtime Configuration (important)
 
-1. **Connect your GitHub repo** - Vercel watches for changes
-2. **Automatic builds** - Every push triggers a new deployment
-3. **Instant rollbacks** - Previous versions always available
-4. **Custom domains** - Use your own domain or Vercel's subdomain
+Next.js inlines every `NEXT_PUBLIC_*` variable into the JavaScript bundle **when the app is built**. Everything else is read **when the server starts**.
 
-### What Vercel Hosts in This Demo
+| Variable | When it is read | Where to set it (Azure) |
+|----------|----------------|-------------------------|
+| `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_OKTA_CLIENT_ID`, `NEXT_PUBLIC_OKTA_DOMAIN`, `NEXT_PUBLIC_OKTA_ISSUER` | Build time | GitHub repository **Variables** → passed as `docker build --build-arg` by the workflow |
+| `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `OKTA_CLIENT_SECRET` | Runtime | Web App **App Settings** (set by the Bicep template) |
+
+Changing a `NEXT_PUBLIC_*` value therefore means **rebuilding the image** (re-run the workflow), not just editing App Settings.
+
+### What the Frontend Container Holds
 
 ```
 packages/progear-sales-agent/
-├── app/                    # Next.js pages and API routes
-│   ├── api/auth/           # NextAuth.js Okta integration
-│   ├── api/chat/           # Proxy to backend
-│   └── page.tsx            # Main chat interface
-├── components/             # React components
-│   ├── ChatInterface.tsx   # Chat UI
-│   ├── TokenExchangeCard.tsx
-│   └── AgentFlowCard.tsx
-└── public/                 # Static assets
+├── Dockerfile              # Multi-stage build → node server.js
+├── .env.local.example      # Template for local development
+├── next.config.js          # output: 'standalone'
+└── src/app/
+    ├── api/auth/           # NextAuth.js Okta integration
+    ├── api/debug/          # Env sanity check (used as Azure health check)
+    ├── architecture/       # Interactive architecture page
+    └── page.tsx            # Main chat interface
 ```
 
-### Vercel Pricing
+### Azure Cost
 
-- **Free tier**: Perfect for demos, includes custom domains
-- **Pro**: $20/month for teams, more bandwidth
-- This demo works fine on the free tier
+- **App Service Plan B1 (Linux)** + **ACR Basic** is the cheapest always-on combination and is what the Bicep template creates by default.
+- A **Free (F1)** plan does not support custom containers; use B1 or above.
+- Check current prices on the [Azure pricing calculator](https://azure.microsoft.com/pricing/calculator/) for your region.
 
 ---
 
@@ -231,7 +244,7 @@ packages/progear-sales-agent/
 | **Persistent services** | Backend stays running (vs serverless) |
 | **Environment groups** | Share env vars across services |
 | **Private networking** | Secure service-to-service communication |
-| **Automatic HTTPS** | Required for API calls from Vercel |
+| **Automatic HTTPS** | Required for API calls from the hosted frontend |
 | **Built-in monitoring** | Logs, metrics, and alerts |
 
 ### How Render Works
@@ -267,22 +280,22 @@ backend/
 
 ---
 
-## How Vercel and Render Work Together
+## How the Frontend and Render Work Together
 
 ### The Split Architecture
 
 | Component | Platform | Why |
 |-----------|----------|-----|
-| **Frontend** (Next.js) | Vercel | Optimized for React/Next.js, great DX |
+| **Frontend** (Next.js) | Localhost or Azure App Service | Standalone Node container, HTTPS on Azure, runs anywhere |
 | **Backend** (FastAPI) | Render | Python support, persistent processes |
 
 ### Communication Flow
 
 ```
 ┌──────────────┐       HTTPS API calls        ┌──────────────┐
-│    Vercel    │ ──────────────────────────▶  │    Render    │
-│  (Frontend)  │                              │   (Backend)  │
-│              │ ◀──────────────────────────  │              │
+│  localhost / │ ──────────────────────────▶  │    Render    │
+│    Azure     │                              │   (Backend)  │
+│  (Frontend)  │ ◀──────────────────────────  │              │
 └──────────────┘       JSON responses         └──────────────┘
        │                                             │
        │                                             │
@@ -300,21 +313,22 @@ backend/
 
 ### Key Configuration Points
 
-For Vercel and Render to communicate:
+For the frontend and Render to communicate:
 
-1. **CORS**: Render must allow requests from your Vercel URL
+1. **CORS**: Render must allow requests from your frontend URL(s)
    ```
-   CORS_ORIGINS=https://your-app.vercel.app
+   CORS_ORIGINS=http://localhost:3000,https://your-app.azurewebsites.net
    ```
 
-2. **API URL**: Vercel must know where to send API requests
+2. **API URL**: the frontend must know where to send API requests (build-time value)
    ```
    NEXT_PUBLIC_API_URL=https://your-backend.onrender.com
    ```
 
-3. **Okta callbacks**: Both URLs must be in Okta's redirect URIs
+3. **Okta callbacks**: every frontend URL you use must be in Okta's redirect URIs
    ```
-   Sign-in: https://your-app.vercel.app/api/auth/callback/okta
+   Sign-in:  http://localhost:3000/api/auth/callback/okta
+             https://your-app.azurewebsites.net/api/auth/callback/okta
    ```
 
 ### Why This Architecture?
@@ -324,7 +338,7 @@ For Vercel and Render to communicate:
 | **Language optimization** | Next.js (JavaScript) + FastAPI (Python) |
 | **Scaling** | Frontend and backend scale independently |
 | **Cost efficiency** | Use best-fit platform for each workload |
-| **Developer experience** | Vercel's Next.js tooling is unmatched |
+| **Portability** | Frontend is a standard container: localhost, Azure App Service or Container Apps |
 | **AI libraries** | Python has better AI/ML ecosystem (LangChain, etc.) |
 
 ---
@@ -337,12 +351,14 @@ For Vercel and Render to communicate:
 |---------|---------|---------|
 | **Okta** | Identity & AI Agent Governance | [developer.okta.com](https://developer.okta.com) |
 | **Anthropic** | Claude AI for LLM | [console.anthropic.com](https://console.anthropic.com) |
-| **Vercel** | Frontend hosting | [vercel.com](https://vercel.com) |
+| **Azure** | Frontend hosting (optional - skip if running on localhost only) | [portal.azure.com](https://portal.azure.com) |
 | **Render** | Backend hosting | [render.com](https://render.com) |
-| **GitHub** | Repository hosting | [github.com](https://github.com) |
+| **GitHub** | Repository hosting + Actions deploy to Azure | [github.com](https://github.com) |
 
 > **Important Account Setup Notes:**
-> - **Sign up for Vercel and Render using your GitHub account** - this makes connecting your repository seamless
+> - **Sign up for Render using your GitHub account** - this makes connecting your repository seamless
+> - **For Azure you need** an active subscription, the [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) (`az`), and Docker (only if you want to build the image locally - the GitHub workflow builds it for you otherwise)
+> - **For localhost you need** Node.js 18+ and Python 3.9+ (or Docker Desktop for `docker compose`)
 > - **Okta Developer accounts are free** and include all features needed for this demo
 > - **Anthropic requires a credit card** - Claude API calls have a small cost (~$0.01-0.10 per demo session)
 
@@ -398,13 +414,15 @@ This application handles user login and is linked to your AI Agent.
 
    **Sign-in redirect URIs:**
    ```
-   https://placeholder.vercel.app/api/auth/callback/okta
+   http://localhost:3000/api/auth/callback/okta
+   https://placeholder.azurewebsites.net/api/auth/callback/okta
    ```
-   > **Note:** Use any placeholder URL for now. We'll update this with your real Vercel URL in Phase 4.
+   > **Note:** The localhost entry is real and lets you test immediately. Use any placeholder for the Azure URL for now - we'll replace it with your real Web App URL in Phase 4.
 
    **Sign-out redirect URIs:**
    ```
-   https://placeholder.vercel.app/auth/signin
+   http://localhost:3000/auth/signin
+   https://placeholder.azurewebsites.net/auth/signin
    ```
 
    **Controlled access:**
@@ -420,7 +438,7 @@ This application handles user login and is linked to your AI Agent.
    | **Client ID** | General tab, top of page | `0oaxxxxxxxxx` |
    | **Client Secret** | General tab, click "Copy to clipboard" | Long random string |
 
-   Store these securely - you'll need them for both Vercel and Render configuration.
+   Store these securely - you'll need them for both frontend (localhost/Azure) and Render configuration.
 
 ### Step 2: Create Demo Users
 
@@ -742,7 +760,7 @@ Once you have create authorization servers per MCP API, Use managed connections 
 
 ### Step 8: Record All Your IDs
 
-**Before proceeding, verify you have collected all these values.** You'll need them for Vercel and Render configuration.
+**Before proceeding, verify you have collected all these values.** You'll need them for frontend (localhost/Azure) and Render configuration.
 
 Use this checklist to track what you've collected:
 
@@ -803,94 +821,182 @@ Use this checklist to track what you've collected:
 
 ---
 
-## Clone and Deploy to Vercel (Frontend)
+## Run the Frontend Locally
+
+This is the quickest way to see the demo and needs no cloud account for the frontend.
+
+### Step 1: Clone the Repository
+
+```bash
+git clone https://github.com/<your-account>/dae-courtedge-ai-demo.git
+cd dae-courtedge-ai-demo
+npm install
+```
+
+### Step 2: Generate a NEXTAUTH_SECRET
+
+This is a random string used to encrypt session tokens. Generate it using one of these methods:
+
+**Mac/Linux:**
+```bash
+openssl rand -base64 32
+```
+
+**Windows (PowerShell):**
+```powershell
+[Convert]::ToBase64String((1..32 | ForEach-Object { [byte](Get-Random -Max 256) }))
+```
+
+Copy the output - it will look like `K7gNU3sdo+OL0wNhqoVWhr3g6s1xYv72ol/pe/Unols=`
+
+### Step 3: Create the Frontend Environment File
+
+Next.js reads environment files from the **package directory**, not the repository root:
+
+```bash
+cp packages/progear-sales-agent/.env.local.example packages/progear-sales-agent/.env.local
+```
+
+Edit `packages/progear-sales-agent/.env.local`:
+
+| Variable | Value | Notes |
+|----------|-------|-------|
+| `NEXTAUTH_URL` | `http://localhost:3000` | |
+| `NEXTAUTH_SECRET` | (the value you generated above) | Required for session encryption |
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Local backend, or your Render URL once deployed |
+| `NEXT_PUBLIC_OKTA_CLIENT_ID` | Your OIDC client ID | Starts with `0oa...` |
+| `NEXT_PUBLIC_OKTA_DOMAIN` | `https://your-org.okta.com` | Your Okta org URL |
+| `NEXT_PUBLIC_OKTA_ISSUER` | `https://your-org.okta.com` | Your Okta org URL (NO auth server ID - use Org AS) |
+| `OKTA_CLIENT_SECRET` | Your OIDC client secret | From Okta app settings |
+
+### Step 4: Start the Frontend
+
+```bash
+npm run dev
+```
+
+Open http://localhost:3000. You should see the ProGear Sales AI interface and be able to click **Sign in with Okta** (the `http://localhost:3000/...` redirect URIs were added in the Okta step). The chat itself needs the backend - either run it locally (`cd backend && uvicorn api.main:app --reload --port 8000`) or point `NEXT_PUBLIC_API_URL` at your Render URL after the next section.
+
+### Alternative: Docker Compose (frontend + backend)
+
+If you have Docker Desktop, you can run both services in containers:
+
+```bash
+cp .env.example .env     # fill in Okta + Anthropic values at the repo root
+docker compose up --build
+```
+
+Frontend: http://localhost:3000, backend: http://localhost:8000. The compose file passes the `NEXT_PUBLIC_*` values from `.env` into the frontend image build.
+
+---
+
+## Deploy the Frontend to Azure App Service
+
+The repository includes everything needed to host the frontend on **Azure App Service for Containers**:
+
+| File | Purpose |
+|------|---------|
+| `packages/progear-sales-agent/Dockerfile` | Multi-stage image producing the Next.js standalone server |
+| `infra/azure/main.bicep` | Creates Azure Container Registry, Linux App Service Plan (B1) and the Web App |
+| `infra/azure/main.bicepparam` | Parameter file template |
+| `.github/workflows/deploy-frontend-azure.yml` | Builds the image, pushes to ACR, deploys to the Web App |
 
 ### Step 1: Fork the Repository
 
 1. Go to this repository on GitHub
 2. Click **Fork** to create your own copy
-3. This allows Vercel to deploy from your GitHub account
+3. GitHub Actions in your fork will build and deploy the frontend
 
-### Step 2: Import to Vercel
+### Step 2: Create the Azure Resources
 
-1. Go to [vercel.com](https://vercel.com) and sign in
-2. Click **Add New** → **Project**
-3. Click **Import** next to your forked repository
-4. Configure the project:
+Pick a globally unique Web App name (becomes `https://<appName>.azurewebsites.net`) and ACR name (alphanumeric only).
 
-   | Setting | Value |
-   |---------|-------|
-   | **Framework Preset** | Next.js |
-   | **Root Directory** | `packages/progear-sales-agent` |
-   | **Build Command** | `npm run build` |
-   | **Output Directory** | `.next` |
+```bash
+az login
+az group create --name rg-progear-demo --location uksouth
 
-5. Click **Deploy** (it will fail initially - that's OK, we need to add environment variables)
+export NEXTAUTH_SECRET=$(openssl rand -base64 32)   # or the PowerShell command above
+export OKTA_CLIENT_SECRET=<your Okta OIDC client secret>
 
-### Step 3: Configure Environment Variables
+az deployment group create \
+  --resource-group rg-progear-demo \
+  --template-file infra/azure/main.bicep \
+  --parameters appName=progear-frontend-<unique> acrName=progearacr<unique> \
+               nextAuthSecret="$NEXTAUTH_SECRET" oktaClientSecret="$OKTA_CLIENT_SECRET"
+```
 
-1. In Vercel, go to your project → **Settings** → **Environment Variables**
+The deployment outputs include `webAppUrl`, `oktaSignInRedirectUri` and `oktaSignOutRedirectUri` - copy them. The Web App will show an error page until the first image is pushed; that's expected.
 
-2. **Generate a NEXTAUTH_SECRET first:**
+The template sets these **App Settings** (runtime values) for you: `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `OKTA_CLIENT_SECRET`, `WEBSITES_PORT=3000`.
 
-   This is a random string used to encrypt session tokens. Generate it using one of these methods:
+### Step 3: Create a Deployment Credential for GitHub
 
-   **Mac/Linux:**
-   ```bash
-   openssl rand -base64 32
-   ```
+```bash
+az ad sp create-for-rbac --name progear-deploy --role contributor \
+  --scopes /subscriptions/<subscription-id>/resourceGroups/rg-progear-demo --sdk-auth
+```
 
-   **Windows (PowerShell):**
-   ```powershell
-   [Convert]::ToBase64String((1..32 | ForEach-Object { [byte](Get-Random -Max 256) }))
-   ```
+Copy the JSON output - it goes into a GitHub secret in the next step.
 
-   **Online Generator:**
-   Visit [generate-secret.vercel.app](https://generate-secret.vercel.app/) and copy the generated secret
+### Step 4: Configure GitHub Secrets and Variables
 
-   Copy the output - it will look like `K7gNU3sdo+OL0wNhqoVWhr3g6s1xYv72ol/pe/Unols=`
+In your fork: **Settings** → **Secrets and variables** → **Actions**.
 
-3. **Add these environment variables:**
+**Secrets:**
 
-   | Variable | Value | Notes |
-   |----------|-------|-------|
-   | `NEXTAUTH_URL` | `https://your-project-name.vercel.app` | Use your actual Vercel URL from dashboard |
-   | `NEXTAUTH_SECRET` | (the value you generated above) | Required for session encryption |
-   | `NEXT_PUBLIC_API_URL` | Leave empty for now | We'll add this after Render deployment |
-   | `NEXT_PUBLIC_OKTA_CLIENT_ID` | Your OIDC client ID | Starts with `0oa...` |
-   | `NEXT_PUBLIC_OKTA_DOMAIN` | `https://your-org.okta.com` | Your Okta org URL |
-   | `NEXT_PUBLIC_OKTA_ISSUER` | `https://your-org.okta.com` | Your Okta org URL (NO auth server ID - use Org AS) |
-   | `OKTA_CLIENT_ID` | Your OIDC client ID | Same as NEXT_PUBLIC version |
-   | `OKTA_CLIENT_SECRET` | Your OIDC client secret | From Okta app settings |
+| Secret | Value |
+|--------|-------|
+| `AZURE_CREDENTIALS` | JSON output from Step 3 |
 
-5. Click **Save** for each variable, then go to **Deployments** and click **Redeploy** on the latest deployment
+**Variables** (these `NEXT_PUBLIC_*` values are compiled into the bundle at build time):
 
-### Step 4: Update Okta Redirect URIs
+| Variable | Value | Notes |
+|----------|-------|-------|
+| `AZURE_RESOURCE_GROUP` | `rg-progear-demo` | |
+| `AZURE_WEBAPP_NAME` | `progear-frontend-<unique>` | `appName` from Step 2 |
+| `AZURE_ACR_NAME` | `progearacr<unique>` | `acrName` from Step 2 |
+| `NEXT_PUBLIC_API_URL` | `https://placeholder.onrender.com` | Replace with your Render URL after the backend is deployed |
+| `NEXT_PUBLIC_OKTA_CLIENT_ID` | Your OIDC client ID | Starts with `0oa...` |
+| `NEXT_PUBLIC_OKTA_DOMAIN` | `https://your-org.okta.com` | Your Okta org URL |
+| `NEXT_PUBLIC_OKTA_ISSUER` | `https://your-org.okta.com` | Your Okta org URL (NO auth server ID - use Org AS) |
 
-Now that you have your real Vercel URL, go back to Okta and replace the placeholder URLs:
+### Step 5: Run the Deploy Workflow
+
+1. Go to **Actions** → **Deploy frontend to Azure** → **Run workflow**
+2. The workflow builds the Docker image, pushes it to ACR tagged with the commit SHA, updates the Web App, and smoke-tests `/api/debug`
+3. From now on every push to `main` that touches the frontend redeploys automatically
+
+> **Building locally instead?** `docker build -f packages/progear-sales-agent/Dockerfile --build-arg NEXT_PUBLIC_API_URL=... --build-arg NEXT_PUBLIC_OKTA_CLIENT_ID=... --build-arg NEXT_PUBLIC_OKTA_DOMAIN=... --build-arg NEXT_PUBLIC_OKTA_ISSUER=... -t <acr>.azurecr.io/progear-frontend:latest .` then `az acr login --name <acr>` and `docker push`.
+
+### Step 6: Update Okta Redirect URIs
+
+Now that you have your real Azure URL, go back to Okta and replace the placeholder URLs:
 
 1. Go to Okta Admin Console → **Applications** → **ProGear Sales Agent App**
 2. Click the **General** tab → **Edit**
-3. **Replace the placeholder redirect URIs with your actual Vercel URL:**
+3. **Replace the placeholder redirect URIs with your actual Azure URL** (keep the localhost entries):
 
    **Sign-in redirect URIs:**
-   - Remove: `https://placeholder.vercel.app/api/auth/callback/okta`
-   - Add: `https://your-actual-project.vercel.app/api/auth/callback/okta`
+   - Remove: `https://placeholder.azurewebsites.net/api/auth/callback/okta`
+   - Add: `https://progear-frontend-<unique>.azurewebsites.net/api/auth/callback/okta`
 
    **Sign-out redirect URIs:**
-   - Remove: `https://placeholder.vercel.app`
-   - Add: `https://your-actual-project.vercel.app/auth/signin`
+   - Remove: `https://placeholder.azurewebsites.net/auth/signin`
+   - Add: `https://progear-frontend-<unique>.azurewebsites.net/auth/signin`
 
 4. Click **Save**
 
-> **Example:** If your Vercel project URL is `https://progear-demo-abc123.vercel.app`, your redirect URI would be `https://progear-demo-abc123.vercel.app/api/auth/callback/okta`
+> **Example:** If your Web App is `https://progear-frontend-abc123.azurewebsites.net`, your redirect URI would be `https://progear-frontend-abc123.azurewebsites.net/api/auth/callback/okta`
 
-### Step 5: Verify Frontend
+### Step 7: Verify Frontend
 
-1. Visit your Vercel URL
+1. Visit your Azure URL
 2. You should see the ProGear Sales AI interface
-3. The chat won't work yet (backend not deployed)
-4. You should be able to click "Sign in with Okta" and authenticate
+3. `https://<app>.azurewebsites.net/api/debug` shows which variables the running container sees (no secret values are returned)
+4. The chat won't work yet (backend not deployed)
+5. You should be able to click "Sign in with Okta" and authenticate
+
+> **Azure Container Apps instead of App Service?** The same image works. Create a Container App with target port 3000, set the same three runtime secrets as environment variables, and adjust the `azure/webapps-deploy` step in the workflow to `azure/container-apps-deploy-action`.
 
 ---
 
@@ -941,7 +1047,7 @@ In Render, go to **Environment** and add these variables:
 | `OKTA_CUSTOMER_AUDIENCE` | `api://progear-customer` |
 | `OKTA_PRICING_AUTH_SERVER_ID` | Your Pricing auth server ID |
 | `OKTA_PRICING_AUDIENCE` | `api://progear-pricing` |
-| `CORS_ORIGINS` | Your Vercel URL: `https://your-project-name.vercel.app` |
+| `CORS_ORIGINS` | Your frontend URL(s), comma-separated: `http://localhost:3000,https://progear-frontend-<unique>.azurewebsites.net` |
 
 ### Step 4: Deploy
 
@@ -972,23 +1078,29 @@ Expected response:
 
 ## Connect Frontend to Backend
 
-### Step 1: Update Vercel Environment Variable
+### Step 1: Point the Frontend at the Backend
 
-1. Go to Vercel → Your Project → **Settings** → **Environment Variables**
-2. Add/update:
-   ```
-   NEXT_PUBLIC_API_URL=https://your-service-name.onrender.com
-   ```
+`NEXT_PUBLIC_API_URL` is a build-time value, so update it where the frontend is built:
 
-### Step 2: Redeploy Frontend
+**Localhost:** edit `packages/progear-sales-agent/.env.local`
+```
+NEXT_PUBLIC_API_URL=https://your-service-name.onrender.com
+```
+then restart `npm run dev`.
 
-1. In Vercel, go to **Deployments**
-2. Click the **...** menu on the latest deployment
-3. Click **Redeploy**
+**Azure:** in GitHub → **Settings** → **Secrets and variables** → **Actions** → **Variables**, set
+```
+NEXT_PUBLIC_API_URL=https://your-service-name.onrender.com
+```
+
+### Step 2: Rebuild and Redeploy the Frontend (Azure)
+
+1. Go to **Actions** → **Deploy frontend to Azure** → **Run workflow**
+2. Wait for the workflow to finish (the smoke test step confirms the app is responding)
 
 ### Step 3: Test the Complete System
 
-1. Visit your Vercel URL
+1. Visit your frontend URL (http://localhost:3000 or your Azure URL)
 2. Click **Sign in with Okta**
 3. Log in as one of your demo users
 4. Try a test query: "What basketballs do we have in stock?"
@@ -1008,7 +1120,7 @@ Expected response:
 | `ANTHROPIC_API_KEY` | Render | Yes | Anthropic Claude API key |
 | `OKTA_DOMAIN` | Both | Yes | Your Okta org URL |
 | `OKTA_CLIENT_ID` | Both | Yes | OIDC application client ID |
-| `OKTA_CLIENT_SECRET` | Vercel | Yes | OIDC application client secret |
+| `OKTA_CLIENT_SECRET` | Frontend (runtime) | Yes | OIDC application client secret - `.env.local` locally, App Setting on Azure |
 | `OKTA_AI_AGENT_ID` | Render | Yes | AI Agent entity ID (`wlp...`) |
 | `OKTA_AI_AGENT_PRIVATE_KEY` | Render | Yes | JWK private key (JSON string) |
 | `OKTA_MAIN_AUTH_SERVER_ID` | Render | No | (Optional) Not used by SDK - Step 1 always uses Org AS |
@@ -1020,13 +1132,17 @@ Expected response:
 | `OKTA_CUSTOMER_AUDIENCE` | Render | Yes | `api://progear-customer` |
 | `OKTA_PRICING_AUTH_SERVER_ID` | Render | Yes | Pricing MCP auth server ID |
 | `OKTA_PRICING_AUDIENCE` | Render | Yes | `api://progear-pricing` |
-| `NEXTAUTH_URL` | Vercel | Yes | Your Vercel URL |
-| `NEXTAUTH_SECRET` | Vercel | Yes | Generate: `openssl rand -base64 32` |
-| `NEXT_PUBLIC_API_URL` | Vercel | Yes | Your Render URL |
-| `NEXT_PUBLIC_OKTA_CLIENT_ID` | Vercel | Yes | OIDC client ID (for frontend) |
-| `NEXT_PUBLIC_OKTA_DOMAIN` | Vercel | Yes | Your Okta org URL |
-| `NEXT_PUBLIC_OKTA_ISSUER` | Vercel | Yes | `https://your-org.okta.com` (NO auth server ID - use Org AS) |
-| `CORS_ORIGINS` | Render | Yes | Your Vercel URL |
+| `NEXTAUTH_URL` | Frontend (runtime) | Yes | `http://localhost:3000` or `https://<app>.azurewebsites.net` (set by Bicep) |
+| `NEXTAUTH_SECRET` | Frontend (runtime) | Yes | Generate: `openssl rand -base64 32` - App Setting on Azure |
+| `NEXT_PUBLIC_API_URL` | Frontend (build time) | Yes | Your Render URL - GitHub Variable → Docker build arg |
+| `NEXT_PUBLIC_OKTA_CLIENT_ID` | Frontend (build time) | Yes | OIDC client ID (for frontend) |
+| `NEXT_PUBLIC_OKTA_DOMAIN` | Frontend (build time) | Yes | Your Okta org URL |
+| `NEXT_PUBLIC_OKTA_ISSUER` | Frontend (build time) | Yes | `https://your-org.okta.com` (NO auth server ID - use Org AS) |
+| `CORS_ORIGINS` | Render | Yes | Your frontend URL(s): `http://localhost:3000,https://<app>.azurewebsites.net` |
+| `AZURE_CREDENTIALS` | GitHub secret | Azure only | Service principal JSON from `az ad sp create-for-rbac --sdk-auth` |
+| `AZURE_RESOURCE_GROUP`, `AZURE_WEBAPP_NAME`, `AZURE_ACR_NAME` | GitHub variables | Azure only | Names used in the Bicep deployment |
+
+> **Platform column:** "Frontend (runtime)" values are read when the server starts - `.env.local` for localhost, App Settings on Azure. "Frontend (build time)" values are compiled into the bundle - `.env.local` for localhost, GitHub Variables (passed as Docker build args) for Azure.
 
 ---
 
@@ -1147,9 +1263,33 @@ Use these talking points when presenting:
 **Cause**: `CORS_ORIGINS` doesn't include frontend URL
 
 **Solution**:
-1. Update `CORS_ORIGINS` in Render to include your exact Vercel URL
-2. For multiple origins: `CORS_ORIGINS=https://app1.vercel.app,https://app2.vercel.app`
+1. Update `CORS_ORIGINS` in Render to include your exact frontend URL (scheme + host, no trailing slash)
+2. For multiple origins: `CORS_ORIGINS=http://localhost:3000,https://progear-frontend-<unique>.azurewebsites.net`
 3. Redeploy the backend after changing
+
+### Azure Web App shows "Application Error" or keeps restarting
+
+**Cause**: Container not pulled, or App Service is probing the wrong port
+
+**Solution**:
+1. Check **Deployment Center** → **Logs** in the Azure portal: a pull failure means the image tag doesn't exist yet (run the GitHub workflow) or the Web App's managed identity lacks `AcrPull` (re-run the Bicep deployment)
+2. Confirm App Setting `WEBSITES_PORT=3000` is present
+3. Open `https://<app>.azurewebsites.net/api/debug` - if it loads, the container is running and the issue is configuration
+
+### Okta login redirects to the wrong URL on Azure
+
+**Cause**: `NEXTAUTH_URL` doesn't match the public Web App URL
+
+**Solution**:
+1. In the Azure portal → Web App → **Environment variables**, confirm `NEXTAUTH_URL=https://<app>.azurewebsites.net` (no trailing slash)
+2. Confirm the same host is in the Okta app's redirect URIs
+3. Restart the Web App after changing App Settings
+
+### Changed a NEXT_PUBLIC_* variable but the app still uses the old value
+
+**Cause**: `NEXT_PUBLIC_*` values are compiled into the bundle at build time
+
+**Solution**: Update the GitHub Variable and re-run the **Deploy frontend to Azure** workflow (or rebuild the Docker image). Editing App Settings alone has no effect on these values.
 
 ### "Unauthorized" on backend health check
 
@@ -1224,21 +1364,26 @@ Use this checklist to verify your deployment is complete:
 - [ ] All demo users assigned to OIDC app
 - [ ] **`NEXT_PUBLIC_OKTA_ISSUER` set to Org AS URL (no auth server ID)**
 
-### Vercel Deployment
-- [ ] Project imported from GitHub
-- [ ] Root directory set to `packages/progear-sales-agent`
-- [ ] All environment variables configured
-- [ ] Okta redirect URIs updated with Vercel URL
-- [ ] Frontend loads without errors
+### Frontend - Localhost
+- [ ] `packages/progear-sales-agent/.env.local` created from the example
+- [ ] `npm run dev` serves http://localhost:3000
+- [ ] Okta redirect URIs include the `http://localhost:3000/...` entries
+
+### Frontend - Azure App Service (optional)
+- [ ] `infra/azure/main.bicep` deployed (ACR + plan + Web App)
+- [ ] `AZURE_CREDENTIALS` secret and `AZURE_*` / `NEXT_PUBLIC_*` variables set in GitHub
+- [ ] **Deploy frontend to Azure** workflow succeeded (smoke test green)
+- [ ] Okta redirect URIs updated with the `azurewebsites.net` URL
+- [ ] Frontend loads without errors at `https://<app>.azurewebsites.net`
 
 ### Render Deployment
 - [ ] Web service created from `backend` directory
 - [ ] All environment variables configured
-- [ ] `CORS_ORIGINS` includes Vercel URL
+- [ ] `CORS_ORIGINS` includes every frontend URL (localhost and/or Azure)
 - [ ] `/health` endpoint returns 200
 
 ### Integration
-- [ ] `NEXT_PUBLIC_API_URL` in Vercel points to Render
+- [ ] `NEXT_PUBLIC_API_URL` (in `.env.local` / GitHub Variables) points to Render and the frontend was rebuilt
 - [ ] Okta login works from frontend
 - [ ] Chat messages get responses
 - [ ] Token exchanges visible in security panel
@@ -1262,20 +1407,27 @@ If you're cloning this repository to deploy your own instance, here's everything
 - [ ] 4 Authorization Servers → get Auth Server IDs
 - [ ] 3 User Groups → configure access policies
 
-### 2. Vercel Environment Variables
-- [ ] `NEXTAUTH_URL` - Your Vercel URL
+### 2. Frontend Configuration
+**Localhost** (`packages/progear-sales-agent/.env.local`):
+- [ ] `NEXTAUTH_URL` - `http://localhost:3000`
 - [ ] `NEXTAUTH_SECRET` - Generate new
-- [ ] `NEXT_PUBLIC_API_URL` - Your Render URL
+- [ ] `NEXT_PUBLIC_API_URL` - Your Render URL (or `http://localhost:8000`)
 - [ ] `NEXT_PUBLIC_OKTA_*` - Your Okta values
-- [ ] `OKTA_CLIENT_*` - Your Okta credentials
+- [ ] `OKTA_CLIENT_SECRET` - Your Okta credential
+
+**Azure** (Bicep parameters + GitHub secrets/variables):
+- [ ] `appName`, `acrName`, `nextAuthSecret`, `oktaClientSecret` - Bicep deployment
+- [ ] `AZURE_CREDENTIALS` - GitHub secret
+- [ ] `AZURE_RESOURCE_GROUP`, `AZURE_WEBAPP_NAME`, `AZURE_ACR_NAME` - GitHub variables
+- [ ] `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_OKTA_*` - GitHub variables
 
 ### 3. Render Environment Variables
 - [ ] `ANTHROPIC_API_KEY` - Your key
 - [ ] All `OKTA_*` variables - Your Okta values
-- [ ] `CORS_ORIGINS` - Your Vercel URL
+- [ ] `CORS_ORIGINS` - Your frontend URL(s)
 
 ### 4. Okta Redirect URIs
-- [ ] Add your Vercel URL to OIDC app
+- [ ] Add `http://localhost:3000` and/or your `azurewebsites.net` URL to the OIDC app
 
 ### That's It!
 The code is designed to work with any Okta org - just update the configuration values.
