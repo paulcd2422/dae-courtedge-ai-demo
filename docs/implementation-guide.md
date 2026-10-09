@@ -350,7 +350,7 @@ For the frontend and Render to communicate:
 | Service | Purpose | Sign Up |
 |---------|---------|---------|
 | **Okta** | Identity & AI Agent Governance | [developer.okta.com](https://developer.okta.com) |
-| **Anthropic** | Claude AI for LLM | [console.anthropic.com](https://console.anthropic.com) |
+| **AWS** | Claude AI via Amazon Bedrock | [console.aws.amazon.com/bedrock](https://console.aws.amazon.com/bedrock) |
 | **Azure** | Frontend hosting (optional - skip if running on localhost only) | [portal.azure.com](https://portal.azure.com) |
 | **Render** | Backend hosting | [render.com](https://render.com) |
 | **GitHub** | Repository hosting + Actions deploy to Azure | [github.com](https://github.com) |
@@ -1033,7 +1033,10 @@ In Render, go to **Environment** and add these variables:
 
 | Variable | Value |
 |----------|-------|
-| `ANTHROPIC_API_KEY` | Your Anthropic API key |
+| `BEDROCK_MODEL_ID` | `us.anthropic.claude-opus-5-5` (default) or `us.anthropic.claude-sonnet-5-5` - must be enabled under Bedrock → Model access |
+| `AWS_REGION` | Region where Bedrock model access is enabled, e.g. `us-east-1` |
+| `AWS_ACCESS_KEY_ID` | Access key for an IAM user/role with `bedrock:InvokeModel` |
+| `AWS_SECRET_ACCESS_KEY` | Matching secret key |
 | `OKTA_DOMAIN` | `https://your-org.okta.com` |
 | `OKTA_CLIENT_ID` | Your OIDC client ID |
 | `OKTA_AI_AGENT_ID` | Your AI Agent ID (`wlp...`) |
@@ -1117,7 +1120,10 @@ NEXT_PUBLIC_API_URL=https://your-service-name.onrender.com
 
 | Variable | Platform | Required | Description |
 |----------|----------|----------|-------------|
-| `ANTHROPIC_API_KEY` | Render | Yes | Anthropic Claude API key |
+| `BEDROCK_MODEL_ID` | Render | No | Bedrock inference profile ID (default `us.anthropic.claude-opus-5-5`) |
+| `AWS_REGION` | Render | Yes | Region with Bedrock model access enabled |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Render | Yes* | IAM credentials with `bedrock:InvokeModel` (*not needed if the host has an IAM role) |
+| `AWS_PROFILE` | Local | No | Named profile from `~/.aws/credentials` instead of static keys |
 | `OKTA_DOMAIN` | Both | Yes | Your Okta org URL |
 | `OKTA_CLIENT_ID` | Both | Yes | OIDC application client ID |
 | `OKTA_CLIENT_SECRET` | Frontend (runtime) | Yes | OIDC application client secret - `.env.local` locally, App Setting on Azure |
@@ -1422,7 +1428,7 @@ If you're cloning this repository to deploy your own instance, here's everything
 - [ ] `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_OKTA_*` - GitHub variables
 
 ### 3. Render Environment Variables
-- [ ] `ANTHROPIC_API_KEY` - Your key
+- [ ] `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (and optionally `BEDROCK_MODEL_ID`) - Bedrock access
 - [ ] All `OKTA_*` variables - Your Okta values
 - [ ] `CORS_ORIGINS` - Your frontend URL(s)
 

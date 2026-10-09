@@ -30,8 +30,8 @@
                                          │  │ In-memory token cache keyed by (user_id, domain)  TTL = exp_in            │  │        └──────────────────────────────────────────────────────┘
                                          │  └────────────────────────────────────────────────────────────────────────────┘  │
                                          │                                                                                  │        ┌──────────────────────────────────────────────────────┐
-                                         │  AI Agents  (each receives domain-scoped access_token from Node 2)              │  ③    │  ANTHROPIC API                                       │
-                                         │  ┌───────────────────────┐  ┌──────────────────────────┐                        │───────►│  claude-sonnet-4-20250514                            │
+                                         │  AI Agents  (each receives domain-scoped access_token from Node 2)              │  ③    │  AMAZON BEDROCK  (Converse API)                      │
+                                         │  ┌───────────────────────┐  ┌──────────────────────────┐                        │───────►│  us.anthropic.claude-opus-5-5                        │
                                          │  │ sales_agent.py        │  │ inventory_agent.py        │                        │◄───────│  Node 1: intent detection + scope routing            │
                                          │  │ sales:read            │  │ inventory:read             │                        │        │  Node 4: multi-agent response synthesis              │
                                          │  │ sales:forecast        │  │ inventory:write            │                        │        └──────────────────────────────────────────────────────┘

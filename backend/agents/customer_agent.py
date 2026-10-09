@@ -5,7 +5,7 @@ Registered as a first-class identity in Okta.
 """
 
 from typing import Dict, Any, Optional
-from langchain_anthropic import ChatAnthropic
+from llm import get_chat_model
 
 
 class CustomerAgent:
@@ -30,8 +30,7 @@ class CustomerAgent:
         self.agent_name = "customer-agent"
         self.scopes = ["customer:read", "customer:write"]
 
-        self.llm = ChatAnthropic(
-            model="claude-sonnet-4-20250514",
+        self.llm = get_chat_model(
             temperature=0.5,
         )
 

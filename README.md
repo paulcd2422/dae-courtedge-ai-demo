@@ -186,7 +186,7 @@ The frontend is a standard Next.js standalone container, so the same image also 
 |-----------|------------|
 | Frontend | Next.js 14, React 18, Tailwind CSS, NextAuth.js |
 | Backend | FastAPI, LangGraph, LangChain, Python 3.9+ |
-| LLM | Anthropic Claude (claude-sonnet-4-20250514) |
+| LLM | Anthropic Claude on Amazon Bedrock (default `us.anthropic.claude-opus-5-5`, via LangChain `ChatBedrockConverse`) |
 | Auth | Okta OIDC, Cross App Access (XAA), ID-JAG Token Exchange |
 | Deployment | Frontend: localhost / Docker / Azure App Service for Containers. Backend: Render (or any Python host) |
 
@@ -206,9 +206,14 @@ OKTA_INVENTORY_AUTH_SERVER_ID=aus...
 OKTA_CUSTOMER_AUTH_SERVER_ID=aus...
 OKTA_PRICING_AUTH_SERVER_ID=aus...
 
-# LLM
-ANTHROPIC_API_KEY=sk-ant-...
+# LLM (Claude on Amazon Bedrock - credentials via the standard AWS chain)
+BEDROCK_MODEL_ID=us.anthropic.claude-opus-5-5   # or us.anthropic.claude-sonnet-5-5
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=AKIA...        # or AWS_PROFILE / IAM role
+AWS_SECRET_ACCESS_KEY=...
 ```
+
+The IAM identity needs `bedrock:InvokeModel` and `bedrock:InvokeModelWithResponseStream` on the model/inference profile, and the model must be enabled under **Bedrock → Model access** in the target region.
 
 ## Project Structure
 

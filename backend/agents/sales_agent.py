@@ -12,7 +12,7 @@ Security Model:
 """
 
 from typing import Dict, Any, Optional, List
-from langchain_anthropic import ChatAnthropic
+from ..llm import get_chat_model
 from langchain_core.messages import HumanMessage, SystemMessage
 import logging
 
@@ -62,9 +62,8 @@ class SalesAgent:
         self._mcp_token: Optional[str] = None
         self._token_info: Optional[Dict] = None
 
-        # Initialize LLM (Claude)
-        self.llm = ChatAnthropic(
-            model="claude-sonnet-4-20250514",
+        # Initialize LLM (Claude on Amazon Bedrock)
+        self.llm = get_chat_model(
             temperature=0.7,
         )
 

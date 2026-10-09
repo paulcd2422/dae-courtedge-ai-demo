@@ -22,6 +22,7 @@ from dotenv import load_dotenv
 from auth.okta_auth import get_okta_auth
 from auth.agent_config import get_all_agent_configs, DEMO_AGENTS
 from orchestrator.orchestrator import Orchestrator
+from llm import describe_llm_config
 from api.conversation_store import conversation_store
 from data.demo_store import demo_store
 
@@ -42,12 +43,14 @@ app = FastAPI(
 cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
 logger.info("CORS allowed origins: %s", cors_origins)
 
-# Anthropic API key check
-_anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
-if _anthropic_key:
-    logger.info("ANTHROPIC_API_KEY is set (starts with: %s...)", _anthropic_key[:12])
-else:
-    logger.warning("ANTHROPIC_API_KEY is NOT set")
+# LLM (Claude on Amazon Bedrock) configuration check
+_llm_config = describe_llm_config()
+logger.info(
+    "LLM provider: %s | model: %s | region: %s | credentials: %s",
+    _llm_config["provider"], _llm_config["model_id"], _llm_config["region"], _llm_config["credentials"],
+)
+if not (os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION")):
+    logger.warning("AWS_REGION is NOT set - defaulting to %s for Bedrock", _llm_config["region"])
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
