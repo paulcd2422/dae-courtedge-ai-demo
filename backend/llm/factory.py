@@ -123,7 +123,7 @@ def describe_llm_config() -> Dict[str, Any]:
     return {
         "provider": "amazon-bedrock",
         "model_id": get_bedrock_model_id(),
-        "provider": infer_provider(get_bedrock_model_id()) or "inferred-by-langchain",
+        "model_provider": infer_provider(get_bedrock_model_id()) or "inferred-by-langchain",
         "sampling_params": supports_sampling_params(get_bedrock_model_id()),
         "region": get_aws_region(),
         "credentials": (
