@@ -23,6 +23,7 @@ from .factory import (
     get_chat_model,
     describe_llm_config,
     supports_sampling_params,
+    infer_provider,
 )
 
 __all__ = [
@@ -33,4 +34,5 @@ __all__ = [
     "get_chat_model",
     "describe_llm_config",
     "supports_sampling_params",
+    "infer_provider",
 ]

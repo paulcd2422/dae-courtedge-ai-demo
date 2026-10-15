@@ -38,6 +38,29 @@ def supports_sampling_params(model_id: str) -> bool:
     return _NO_SAMPLING_PARAMS.search(model_id) is None
 
 
+_KNOWN_PROVIDERS = ("anthropic", "amazon", "meta", "mistral", "cohere", "ai21", "deepseek")
+
+
+def infer_provider(model_id: str) -> Optional[str]:
+    """
+    Provider name for ``ChatBedrockConverse``.
+
+    LangChain infers the provider from plain model IDs (``us.anthropic.claude-...``)
+    but requires it to be supplied when the model ID is an inference-profile or
+    application-inference-profile ARN. BEDROCK_MODEL_PROVIDER overrides inference.
+    """
+    explicit = os.getenv("BEDROCK_MODEL_PROVIDER")
+    if explicit:
+        return explicit
+    if not model_id.startswith("arn:"):
+        return None  # let langchain-aws infer it
+    tail = model_id.rsplit("/", 1)[-1]  # e.g. global.anthropic.claude-sonnet-5-5
+    for part in tail.split("."):
+        if part in _KNOWN_PROVIDERS:
+            return part
+    return "anthropic"
+
+
 def get_bedrock_model_id() -> str:
     """Bedrock model / inference-profile ID from the environment."""
     return os.getenv("BEDROCK_MODEL_ID", DEFAULT_BEDROCK_MODEL_ID)
@@ -70,6 +93,9 @@ def get_chat_model(
         "model": resolved_model,
         "region_name": get_aws_region(),
     }
+    provider = infer_provider(resolved_model)
+    if provider:
+        kwargs["provider"] = provider
     if supports_sampling_params(resolved_model):
         kwargs["temperature"] = temperature
     else:
@@ -97,6 +123,7 @@ def describe_llm_config() -> Dict[str, Any]:
     return {
         "provider": "amazon-bedrock",
         "model_id": get_bedrock_model_id(),
+        "provider": infer_provider(get_bedrock_model_id()) or "inferred-by-langchain",
         "sampling_params": supports_sampling_params(get_bedrock_model_id()),
         "region": get_aws_region(),
         "credentials": (
