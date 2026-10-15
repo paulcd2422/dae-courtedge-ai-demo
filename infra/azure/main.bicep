@@ -42,6 +42,12 @@ param nextAuthSecret string
 @description('Okta OIDC application client secret.')
 param oktaClientSecret string
 
+@description('Okta Org Authorization Server URL, e.g. https://your-org.okta.com (no /oauth2/<id> suffix). Read at runtime; change it in App Settings without rebuilding.')
+param oktaIssuer string
+
+@description('Okta OIDC application client ID (0oa...). Read at runtime.')
+param oktaClientId string
+
 var acrLoginServer = '${acr.name}.azurecr.io'
 var acrPullRoleId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
 
@@ -98,6 +104,10 @@ resource webApp 'Microsoft.Web/sites@2023-01-01' = {
         { name: 'NEXTAUTH_URL', value: 'https://${appName}.azurewebsites.net' }
         { name: 'NEXTAUTH_SECRET', value: nextAuthSecret }
         { name: 'OKTA_CLIENT_SECRET', value: oktaClientSecret }
+        // Runtime Okta OIDC settings - these override the NEXT_PUBLIC_* values
+        // baked into the image, so a wrong issuer is fixed here + restart, no rebuild.
+        { name: 'OKTA_ISSUER', value: oktaIssuer }
+        { name: 'OKTA_CLIENT_ID', value: oktaClientId }
       ]
     }
   }

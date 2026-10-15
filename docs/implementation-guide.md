@@ -203,10 +203,12 @@ Next.js inlines every `NEXT_PUBLIC_*` variable into the JavaScript bundle **when
 
 | Variable | When it is read | Where to set it (Azure) |
 |----------|----------------|-------------------------|
-| `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_OKTA_CLIENT_ID`, `NEXT_PUBLIC_OKTA_DOMAIN`, `NEXT_PUBLIC_OKTA_ISSUER` | Build time | GitHub repository **Variables** → passed as `docker build --build-arg` by the workflow |
+| `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_OKTA_DOMAIN` | Build time | GitHub repository **Variables** → passed as `docker build --build-arg` by the workflow |
+| `NEXT_PUBLIC_OKTA_CLIENT_ID`, `NEXT_PUBLIC_OKTA_ISSUER` | Build time (fallback only) | GitHub repository **Variables** - used only when the runtime variables below are absent |
+| `OKTA_ISSUER`, `OKTA_CLIENT_ID` | Runtime (preferred) | Web App **App Settings** (set by the Bicep template). Override the baked `NEXT_PUBLIC_*` values for NextAuth |
 | `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `OKTA_CLIENT_SECRET` | Runtime | Web App **App Settings** (set by the Bicep template) |
 
-Changing a `NEXT_PUBLIC_*` value therefore means **rebuilding the image** (re-run the workflow), not just editing App Settings.
+Changing a build-time value therefore means **rebuilding the image** (re-run the workflow), not just editing App Settings. The Okta issuer and client ID are deliberately runtime so a wrong authorization server can be corrected in App Settings followed by a restart.
 
 ### What the Frontend Container Holds
 
@@ -927,7 +929,7 @@ az deployment group create \
 
 The deployment outputs include `webAppUrl`, `oktaSignInRedirectUri` and `oktaSignOutRedirectUri` - copy them. The Web App will show an error page until the first image is pushed; that's expected.
 
-The template sets these **App Settings** (runtime values) for you: `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `OKTA_CLIENT_SECRET`, `WEBSITES_PORT=3000`.
+The template sets these **App Settings** (runtime values) for you: `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `OKTA_CLIENT_SECRET`, `OKTA_ISSUER`, `OKTA_CLIENT_ID`, `WEBSITES_PORT=3000`. Pass `oktaIssuer=https://your-org.okta.com oktaClientId=0oa...` as additional parameters to the `az deployment group create` command above.
 
 ### Step 3: Create a Deployment Credential for GitHub
 
@@ -1290,6 +1292,18 @@ Use these talking points when presenting:
 1. In the Azure portal → Web App → **Environment variables**, confirm `NEXTAUTH_URL=https://<app>.azurewebsites.net` (no trailing slash)
 2. Confirm the same host is in the Okta app's redirect URIs
 3. Restart the Web App after changing App Settings
+
+### Sign-in goes to the wrong Okta authorization server (default/custom AS instead of Org AS)
+
+**Cause**: The issuer NextAuth is using points at a custom authorization server (`.../oauth2/aus...` or `.../oauth2/default`). The backend's ID-JAG exchange only accepts ID tokens from the **Org** authorization server (`https://your-org.okta.com`, nothing after the host).
+
+**Solution**:
+1. Open `https://<app>.azurewebsites.net/api/debug` and read `effectiveIssuer` and `effectiveIssuerSource`. If the source says `NEXT_PUBLIC_OKTA_ISSUER (baked at build)`, the value came from the GitHub Variable at image build time and App Settings for `NEXT_PUBLIC_OKTA_ISSUER` are ignored.
+2. In the Azure portal → Web App → **Environment variables**, add `OKTA_ISSUER=https://your-org.okta.com` (and `OKTA_CLIENT_ID`). These are read at runtime and take precedence. **Restart** the Web App.
+3. Also correct the GitHub Variable `NEXT_PUBLIC_OKTA_ISSUER` so future builds bake the right fallback.
+4. Confirm `/api/debug` now shows `issuerIsOrgAuthServer: true`, then sign in again.
+
+> If your deployed image predates the `OKTA_ISSUER` support, re-run the **Deploy frontend to Azure** workflow once (with the corrected GitHub Variable) to pick up both the new code and the right value.
 
 ### Changed a NEXT_PUBLIC_* variable but the app still uses the old value
 

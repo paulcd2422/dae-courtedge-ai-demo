@@ -16,7 +16,10 @@
 #   NEXT_PUBLIC_OKTA_ISSUER     - https://your-org.okta.com (Org AS, no auth server ID)
 #
 # NEXT_PUBLIC_* values are compiled into the bundle by Next.js, which is why
-# they are passed as build args rather than App Settings.
+# they are passed as build args rather than App Settings. Changing one of them
+# requires re-running this workflow. Exception: the Okta issuer and client ID used
+# by NextAuth are read at RUNTIME from the OKTA_ISSUER / OKTA_CLIENT_ID App
+# Settings when present (set by infra/azure/main.bicep), overriding the baked values.
 
 name: Deploy frontend to Azure
 
